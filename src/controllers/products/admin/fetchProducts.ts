@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
-import { prisma } from "../../../lib/prisma";
+import { products } from "../../../db/schema";
+import { and, or, ilike, asc, desc, SQL } from "drizzle-orm";
+import { db } from "../../../lib/db";
 
 interface FetchProductsQuery {
   filters?: Record<string, string>;
@@ -15,44 +17,35 @@ const fetchProducts = async (
   try {
     const { search, filters, sortOptions, initialProducts } = req.query;
 
-    const where: Record<string, any> = {};
+    const conditions: SQL[] = [];
 
-    // ✅ filtering
+    // 🧪 filters
     if (filters && typeof filters === "object") {
       for (const key in filters) {
-        where[key] = filters[key];
+        // dynamic filter (basic equality)
+        conditions.push(
+          // @ts-ignore dynamic key access
+          ilike(products[key], filters[key]),
+        );
       }
     }
 
-    // ✅ searching
+    // 🔍 search (name, description fields)
     if (search && typeof search === "string") {
-      where.OR = [
-        {
-          name: {
-            contains: search,
-            mode: "insensitive",
-          },
-        },
-        {
-          shortDescription: {
-            contains: search,
-            mode: "insensitive",
-          },
-        },
-        {
-          description: {
-            contains: search,
-            mode: "insensitive",
-          },
-        },
-      ];
+      conditions.push(
+        or(
+          ilike(products.name, `%${search}%`),
+          ilike(products.shortDescription, `%${search}%`),
+          ilike(products.description, `%${search}%`),
+        )!,
+      );
     }
 
-    // ✅ sorting
+    // 📊 sorting
     const allowedSortFields = ["price", "name", "createdAt"] as const;
     type SortField = (typeof allowedSortFields)[number];
 
-    let orderBy: { [key in SortField]?: "asc" | "desc" } | undefined;
+    let orderBy: ReturnType<typeof asc> | ReturnType<typeof desc> | undefined;
 
     const sortArray = Array.isArray(sortOptions)
       ? sortOptions
@@ -67,26 +60,30 @@ const fetchProducts = async (
       const [field, direction] = sort.split("-");
 
       if (allowedSortFields.includes(field as SortField)) {
-        orderBy = {
-          [field as SortField]: direction === "desc" ? "desc" : "asc",
-        };
+        orderBy =
+          direction === "desc"
+            ? desc(products[field as SortField])
+            : asc(products[field as SortField]);
       }
     }
 
-    // ✅ initialProducts fix (comes as string from query)
+    // 📦 pagination
     const take = initialProducts ? parseInt(initialProducts, 10) : 30;
 
-    const filteredProducts = await prisma.product.findMany({
-      where,
-      orderBy,
-      take,
-    });
+    // 🧾 query
+    const result = await db
+      .select()
+      .from(products)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(orderBy as any)
+      .limit(take);
 
     return res.status(200).json({
-      products: filteredProducts,
+      products: result,
     });
   } catch (error) {
     console.log(error);
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",

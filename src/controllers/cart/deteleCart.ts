@@ -1,26 +1,30 @@
 import type { Response } from "express";
 import type { AuthCartParams } from "./addToCart";
-import { prisma } from "../../lib/prisma";
+import { cart } from "../../db/schema";
+import { eq } from "drizzle-orm";
+import { db } from "../../lib/db";
 
 const deleteCart = async (req: AuthCartParams, res: Response) => {
   try {
     const userId = req.user?.id;
-    if (!userId)
+
+    if (!userId) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized...",
       });
+    }
 
-    await prisma.cart.deleteMany({
-      where: { userId },
-    });
+    // 🗑️ delete all cart items for user
+    await db.delete(cart).where(eq(cart.userId, userId));
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Cart deleted successfully",
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: "Internal server error",
     });

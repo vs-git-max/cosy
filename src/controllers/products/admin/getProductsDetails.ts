@@ -1,5 +1,8 @@
 import type { Request, Response } from "express";
-import { prisma } from "../../../lib/prisma";
+import { products } from "../../../db/schema";
+import { eq } from "drizzle-orm";
+import { db } from "../../../lib/db";
+
 export interface Params {
   productId: string;
 }
@@ -15,13 +18,17 @@ const getProductDetails = async (req: Request<Params>, res: Response) => {
       });
     }
 
-    const isProduct = await prisma.product.findUnique({
-      where: {
-        id: productId,
-      },
-    });
+    // 🔍 fetch product
+    const result = await db
+      .select()
+      .from(products)
+      .where(eq(products.id, productId))
+      .limit(1);
 
-    if (!isProduct) {
+    const product = result[0];
+
+    // ❌ not found handling
+    if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
@@ -29,10 +36,11 @@ const getProductDetails = async (req: Request<Params>, res: Response) => {
     }
 
     return res.status(200).json({
-      product: isProduct,
+      product,
     });
   } catch (error) {
     console.log(error);
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",

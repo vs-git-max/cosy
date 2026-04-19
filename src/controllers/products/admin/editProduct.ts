@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import type { Params } from "./getProductsDetails";
-import { prisma } from "../../../lib/prisma";
+import { products } from "../../../db/schema";
+import { eq } from "drizzle-orm";
+import { db } from "../../../lib/db";
 
 interface UpdatedProductProps {
   name?: string;
@@ -19,6 +21,7 @@ const editProduct = async (
 ) => {
   try {
     const { productId } = req.params;
+
     if (!productId) {
       return res.status(400).json({
         success: false,
@@ -39,6 +42,7 @@ const editProduct = async (
       quantity,
     } = req.body;
 
+    // 🧱 build dynamic update object
     const dataToUpdate: UpdatedProductProps = {
       ...(name !== undefined && { name }),
       ...(shortDescription !== undefined && { shortDescription }),
@@ -57,25 +61,28 @@ const editProduct = async (
       });
     }
 
-    const updatedProductDetails = await prisma.product.update({
-      where: { id: productId },
-      data: dataToUpdate,
-    });
+    // 🔄 update product
+    const updated = await db
+      .update(products)
+      .set(dataToUpdate)
+      .where(eq(products.id, productId))
+      .returning();
 
-    return res.status(200).json({
-      success: true,
-      message: "Product updated successfully",
-      product: updatedProductDetails,
-    });
-  } catch (error: any) {
-    console.error(error);
-
-    if (error?.code === "P2025") {
+    // ❌ not found handling (Drizzle style)
+    if (updated.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
+
+    return res.status(200).json({
+      success: true,
+      message: "Product updated successfully",
+      product: updated[0],
+    });
+  } catch (error) {
+    console.error(error);
 
     return res.status(500).json({
       success: false,

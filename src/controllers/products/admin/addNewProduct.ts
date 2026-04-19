@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
-import { prisma } from "../../../lib/prisma";
+import { products } from "../../../db/schema";
+import { eq } from "drizzle-orm";
+import { db } from "../../../lib/db";
 
 const addNewProduct = async (req: Request, res: Response) => {
   try {
@@ -16,6 +18,7 @@ const addNewProduct = async (req: Request, res: Response) => {
 
     console.log(req.body);
 
+    // 🧪 validation
     if (
       [
         name,
@@ -35,26 +38,30 @@ const addNewProduct = async (req: Request, res: Response) => {
       });
     }
 
-    //checking if the product already exists
-    const alreadyProduct = await prisma.product.findUnique({ where: { name } });
-    if (alreadyProduct) {
+    // 🔍 check if product exists
+    const existingProduct = await db
+      .select()
+      .from(products)
+      .where(eq(products.name, name))
+      .limit(1);
+
+    if (existingProduct.length > 0) {
       return res.status(409).json({
         success: false,
         message: "Product with the name already exists",
       });
     }
 
-    await prisma.product.create({
-      data: {
-        name,
-        shortDescription,
-        category,
-        image,
-        description,
-        price,
-        salesPrice,
-        quantity,
-      },
+    // 🧾 create product
+    await db.insert(products).values({
+      name,
+      shortDescription,
+      category,
+      image,
+      description,
+      price,
+      salesPrice,
+      quantity,
     });
 
     return res.status(200).json({
@@ -63,6 +70,7 @@ const addNewProduct = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.log(error);
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",

@@ -1,11 +1,14 @@
 import type { Request, Response } from "express";
-import { prisma } from "../../lib/prisma";
+import { db } from "../../lib/db";
+import { users } from "../../db/schema";
+import { eq } from "drizzle-orm";
 import { encryptPassword } from "../../helpers/password";
 import jwt from "jsonwebtoken";
 
 export async function signup(req: Request, res: Response) {
   try {
     const { email, password, name } = req.body;
+
     if ([email, password, name].some((item) => !item)) {
       return res.status(403).json({
         success: false,
@@ -13,46 +16,50 @@ export async function signup(req: Request, res: Response) {
       });
     }
 
-    //check if the email already exists
-    const isUser = await prisma.user.findUnique({
-      where: {
-        email,
-      },
-    });
+    // 🔍 check if user exists
+    const existingUser = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
 
-    if (isUser) {
+    if (existingUser.length > 0) {
       return res.status(400).json({
         success: false,
         message: "User with the email already exists",
       });
     }
 
-    //hashing the password
+    // 🔐 hash password
     const encryptedPassword = await encryptPassword(password, 12);
 
-    //working on the roles
+    // 👑 role logic
     let userRole: "USER" | "ADMIN" = "USER";
-    if (email === (process.env.ADMIN_EMAIL as string)) {
+    if (email === process.env.ADMIN_EMAIL) {
       userRole = "ADMIN";
     }
 
-    //creating the user
-    const newUser = await prisma.user.create({
-      data: {
+    // 🧑 create user
+    const insertedUser = await db
+      .insert(users)
+      .values({
         name,
         email,
         password: encryptedPassword,
         role: userRole,
-      },
-      select: {
-        id: true,
-        name: true,
-        role: true,
-        email: true,
-      },
-    });
+      })
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+      });
 
-    //token
+    const newUser = insertedUser[0];
+
+    if (!newUser) return;
+
+    // 🎟️ token
     const token = jwt.sign(
       {
         id: newUser.id,

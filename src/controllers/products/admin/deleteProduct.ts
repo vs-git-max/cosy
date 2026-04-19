@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import type { Params } from "./getProductsDetails";
-import { prisma } from "../../../lib/prisma";
+import { products } from "../../../db/schema";
+import { eq } from "drizzle-orm";
+import { db } from "../../../lib/db";
 
 const deleteProduct = async (req: Request<Params>, res: Response) => {
   try {
@@ -13,20 +15,26 @@ const deleteProduct = async (req: Request<Params>, res: Response) => {
       });
     }
 
-    await prisma.product.delete({ where: { id: productId } });
+    // 🗑️ delete product
+    const deleted = await db
+      .delete(products)
+      .where(eq(products.id, productId))
+      .returning();
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Product deleted successfully" });
-  } catch (error: any) {
-    console.log(error);
-
-    if (error?.code === "P2025") {
+    // 🔍 check if product existed
+    if (deleted.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
+
+    return res.status(200).json({
+      success: true,
+      message: "Product deleted successfully",
+    });
+  } catch (error) {
+    console.log(error);
 
     return res.status(500).json({
       success: false,

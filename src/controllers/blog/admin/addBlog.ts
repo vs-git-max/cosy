@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
-import { prisma } from "../../../lib/prisma";
+import { db } from "../../../lib/db";
+import { blogs } from "../../../db/schema";
+import { eq } from "drizzle-orm";
 
 const addBlog = async (req: Request, res: Response) => {
   try {
@@ -10,33 +12,36 @@ const addBlog = async (req: Request, res: Response) => {
       text: string;
     };
 
+    // 🔍 validate fields
     if (
       [title, blogPhoto, shortText, text].some(
         (item) => !item || item.trim() === "",
       )
-    )
+    ) {
       return res.status(403).json({
         message: "Please add all the fields",
       });
+    }
 
-    const isBlog = await prisma.blog.findUnique({
-      where: {
-        title,
-      },
-    });
+    // 🔍 check if blog exists
+    const existingBlog = await db
+      .select()
+      .from(blogs)
+      .where(eq(blogs.title, title))
+      .limit(1);
 
-    if (isBlog)
+    if (existingBlog.length > 0) {
       return res.status(403).json({
         message: "Blog with the title already exists",
       });
+    }
 
-    await prisma.blog.create({
-      data: {
-        title,
-        blogPhoto,
-        shortText,
-        text,
-      },
+    // 📝 create blog
+    await db.insert(blogs).values({
+      title,
+      blogPhoto,
+      shortText,
+      text,
     });
 
     return res.status(200).json({
@@ -44,7 +49,7 @@ const addBlog = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error",
     });
   }

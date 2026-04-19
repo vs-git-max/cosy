@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
-import { prisma } from "../../lib/prisma";
+import { db } from "../../lib/db";
 import { confirmPassword } from "../../helpers/password";
 import jwt from "jsonwebtoken";
+import { users } from "../../db/schema";
+import { eq } from "drizzle-orm";
 
 export async function login(req: Request, res: Response) {
   try {
@@ -14,22 +16,24 @@ export async function login(req: Request, res: Response) {
       });
     }
 
-    //check if user
-    const isUser = await prisma.user.findFirst({
-      where: {
-        email,
-      },
-    });
+    const isUser = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
 
-    if (!isUser) {
+    const user = isUser[0];
+
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: "User with the email not found",
       });
     }
 
-    //confirm the password
-    const correctPassword = await confirmPassword(password, isUser.password);
+    // 🔐 confirm password
+    const correctPassword = await confirmPassword(password, user.password);
+
     if (!correctPassword) {
       return res.status(400).json({
         success: false,
@@ -37,15 +41,15 @@ export async function login(req: Request, res: Response) {
       });
     }
 
-    const { password: _, ...newUserWIthoutPassword } = isUser;
+    const { password: _, ...userWithoutPassword } = user;
 
-    //creating the token again
+    // 🎟️ create token
     const token = jwt.sign(
       {
-        id: newUserWIthoutPassword.id,
-        name: newUserWIthoutPassword.name,
-        role: newUserWIthoutPassword.role,
-        email: newUserWIthoutPassword.email,
+        id: userWithoutPassword.id,
+        name: userWithoutPassword.name,
+        role: userWithoutPassword.role,
+        email: userWithoutPassword.email,
       },
       process.env.JWT_SECRET as string,
       { expiresIn: "2h" },
@@ -62,7 +66,7 @@ export async function login(req: Request, res: Response) {
       .json({
         success: true,
         message: "Login success...",
-        data: newUserWIthoutPassword,
+        data: userWithoutPassword,
       });
   } catch (error) {
     console.log(error);

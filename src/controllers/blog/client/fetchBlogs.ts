@@ -4,8 +4,12 @@ import { blogs } from "../../../db/schema";
 
 const fetchUserBlog = async (_req: Request, res: Response) => {
   try {
-    // 📦 fetch all blogs
     const allBlogs = await db.select().from(blogs);
+
+    if (allBlogs.length === 0)
+      return res.status(400).json({
+        message: "No blogs found",
+      });
 
     return res.status(200).json({
       blogs: allBlogs,

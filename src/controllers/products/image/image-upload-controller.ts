@@ -13,7 +13,7 @@ const uploadImage = async (req: Request, res: Response) => {
     const steamUpload = (fileBuffer: Buffer) => {
       return new Promise<string>((resolve, reject) => {
         const steam = cloudinary.uploader.upload_stream(
-          { folder: "cosy-products" },
+          { folder: "cosycraft-product-images" },
           (error, result) => {
             if (error || !result)
               return reject(error || new Error("Upload failed"));

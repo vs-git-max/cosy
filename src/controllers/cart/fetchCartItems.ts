@@ -15,17 +15,17 @@ const fetchCartItems = async (req: AuthCartParams, res: Response) => {
       });
     }
 
-    // 📦 fetch cart + join product (manual join in Drizzle)
+    // 📦 Fetch cart items with product join
     const cartProducts = await db
       .select({
-        id: cart.id,
+        productId: cart.productId,
         quantity: cart.quantity,
-        createdAt: cart.createdAt,
 
         product: {
           id: products.id,
           name: products.name,
           price: products.price,
+          image: products.image,
           salesPrice: products.salesPrice,
         },
       })
@@ -34,34 +34,34 @@ const fetchCartItems = async (req: AuthCartParams, res: Response) => {
       .where(eq(cart.userId, userId))
       .orderBy(desc(cart.createdAt));
 
-    // 📊 count total items
-    const totalResult = await db
-      .select()
-      .from(cart)
-      .where(eq(cart.userId, userId));
+    // 📊 total items count
+    const total = cartProducts.length;
 
-    const total = totalResult.length;
-
-    // 💰 compute totals
+    // 💰 map with calculated totalPrice
     const cartItemsWithTotal = cartProducts.map((item) => {
+      const qyt = item.quantity ?? 0;
+
       const price =
         (item.product?.salesPrice ?? 0) > 0
-          ? item.product?.salesPrice!
-          : item.product?.price!;
+          ? item.product!.salesPrice
+          : item.product!.price;
 
       return {
-        ...item,
-        totalPrice: (item.quantity ?? 0) * price,
+        productId: item.productId,
+        quantity: qyt,
+        product: item.product,
+        totalPrice: qyt * price,
       };
     });
 
+    // 💵 totals
     const totalWithoutTax = cartItemsWithTotal.reduce(
-      (sum, current) => sum + current.totalPrice,
+      (sum, item) => sum + item.totalPrice,
       0,
     );
 
     const tax = totalWithoutTax * 0.05;
-    const grandTotal = totalWithoutTax + Number(tax.toFixed(2));
+    const grandTotal = totalWithoutTax + tax;
 
     return res.status(200).json({
       cartItems: cartItemsWithTotal,

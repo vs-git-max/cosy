@@ -75,8 +75,9 @@ const fetchProducts = async (
       .select()
       .from(products)
       .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(orderBy as any)
       .limit(take);
+
+    console.log("products", result);
 
     return res.status(200).json({
       products: result,

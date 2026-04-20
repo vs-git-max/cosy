@@ -10,29 +10,42 @@ const uploadImage = async (req: Request, res: Response) => {
       });
     }
 
-    const steamUpload = (fileBuffer: Buffer) => {
+    if (!req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({
+        success: false,
+        message: "Only image files are allowed",
+      });
+    }
+
+    const streamUpload = (fileBuffer: Buffer) => {
       return new Promise<string>((resolve, reject) => {
-        const steam = cloudinary.uploader.upload_stream(
+        const stream = cloudinary.uploader.upload_stream(
           { folder: "cosycraft-product-images" },
           (error, result) => {
-            if (error || !result)
+            if (error || !result) {
               return reject(error || new Error("Upload failed"));
+            }
             resolve(result.secure_url);
           },
         );
 
-        steam.end(fileBuffer);
+        stream.end(fileBuffer);
       });
     };
 
-    const imageUrl = await steamUpload(req.file.buffer);
+    const imageUrl = await streamUpload(req.file.buffer);
 
-    res
-      .status(200)
-      .json({ success: true, message: "Image upload success", url: imageUrl });
+    res.status(200).json({
+      success: true,
+      message: "Image upload success",
+      url: imageUrl,
+    });
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("Upload error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
 

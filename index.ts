@@ -28,7 +28,7 @@ app.use(cookieParser());
 
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://cosycraft-furniture.vercel.app",
+  "https://cosy-next.vercel.app",
 ];
 
 app.use(
